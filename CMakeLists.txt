@@ -13,12 +13,12 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/AST)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ASTPrinter)
-#include_directories(${CMAKE_CURRENT_SOURCE_DIR}/IR)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/IR)
 
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AST)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ASTPrinter)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/IR)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/IR)
 
 add_executable(
         compiler
@@ -27,13 +27,7 @@ add_executable(
 
 target_link_libraries(
         compiler
+        IRLIB
         ASTPLIB
         ASTLIB
 )
-
-#target_link_libraries(
-#        compiler
-#        IRLIB
-#        ASTPLIB
-#        ASTLIB
-#)
