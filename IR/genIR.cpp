@@ -18,18 +18,18 @@ std::vector<std::string> paramNames;    //函数形参名表
 Value *retAlloca = nullptr;             //返回值
 BasicBlock *retBB = nullptr;            //返回语句块
 bool isNewFunc = false;                 //判断是否为新函数，用来处理函数作用域问题
-bool requireLval = false;               //告诉LVal节点不需要发射load指令
+bool requireLVal = false;               //告诉LVal节点不需要发射load指令
 Function *currentFunction = nullptr;    //当前函数
 Value *recentVal = nullptr;             //最近的表达式的value
 BasicBlock *whileCondBB = nullptr;      //while语句cond分支
 BasicBlock *trueBB = nullptr;           //通用true分支，即while和if为真时所跳转的基本块
 BasicBlock *falseBB = nullptr;          //通用false分支，即while和if为假时所跳转的基本块
-std::vector<BasicBlock *> whilefalseBB; //while语句false分支，用于break跳转
+BasicBlock * whileFalseBB;              //while语句false分支，用于break跳转
 int id = 1;                             //recent标号
 
 
 //判断得到的赋值与声明类型是否一致，并做转换
-void GenIR::checkType() const {
+void GenIR::checkInitType() const {
     if (curType == INT32_T) {
         if (dynamic_cast<ConstantFloat*>(recentVal)) {
             auto temp = dynamic_cast<ConstantFloat*>(recentVal);
@@ -86,7 +86,7 @@ void GenIR::visit(DefAST &ast) {
                 useConst = true;
                 ast.initVal->accept(*this);
                 useConst = false;
-                checkType();
+                checkInitType();
                 if (isConst) {
                     scope.push(varName, recentVal);   //单个常量定义不用new GlobalVariable
                 } else { //全局变量
@@ -132,11 +132,14 @@ void GenIR::visit(DefAST &ast) {
     if (ast.arrays.empty()) {   //不是数组，即普通局部量
         if (ast.initVal == nullptr) {   //无初始化
             if (isConst) cout << "no initVal when define const!" << endl;   //无初始化局部常量报错
+            else { //无初始化变量
+                AllocaInst *varAlloca;
+                varAlloca = builder->create_alloca(curType);
+                scope.push(varName, varAlloca);
+            }
         } else { //有初始化
-            useConst = true;
             ast.initVal->accept(*this);
-            useConst = false;
-            checkType();
+            checkInitType();
             if (isConst) {
                 scope.push(varName, recentVal);  //单个常量定义不用new GlobalVariable
             } else {
@@ -147,16 +150,16 @@ void GenIR::visit(DefAST &ast) {
             }
         }
     } else {    //局部数组量
-        vector<int> dimensions, dimensionsCnt;  //数组各维度, [2][3][4]对应; 次维度数组元素个数, [24][12][4]
+        vector<int> dimensions(ast.arrays.size()), dimensionsCnt((ast.arrays.size()));  //数组各维度, [2][3][4]对应; 次维度数组元素个数, [24][12][4]
         int totalByte = 1; //存储总共的字节数
         useConst = true;
         //获取数组各维度
-        for (auto &exp : ast.arrays) {
-            exp->accept(*this);
+        for (int i = dimensions.size() - 1; i>= 0; i--) {
+            ast.arrays[i]->accept(*this);
             int dimension = dynamic_cast<ConstantInt*>(recentVal)->value_;
             totalByte *= dimension;
-            dimensions.push_back(dimension);
-            dimensionsCnt.push_back(totalByte);
+            dimensions[i] = dimension;
+            dimensionsCnt[i] = totalByte;
         }
         totalByte *= 4; //计算字节数
         useConst = false;
@@ -243,7 +246,7 @@ ConstantArray* GenIR::globalInit(vector<int> &dimensions, vector<ArrayType*> &ar
         if (val->exp != nullptr) {
             dimAdd = dimensions.size() - 1;
             val->exp->accept(*this);
-            checkType();
+            checkInitType();
             elements.push_back((ConstantInt*)recentVal);
         } else {
             auto nextUp = getNextDim(elementsCnts, up); //该嵌套数组的维度
@@ -281,12 +284,12 @@ void GenIR::localInit(Value* ptr, vector<unique_ptr<InitValAST>> &list, vector<i
             if (cnt == 0) cnt++; //第一次赋值时可以少一次create_gep
             else tempPtr = builder->create_gep(ptr, {CONST_INT(cnt++)});
             initVal->exp->accept(*this);
-            checkType();
+            checkInitType();
             builder->create_store(recentVal, tempPtr);
         } else {
             auto nextUp = getNextDim(dimensionsCnt, up, cnt);
             if (nextUp == 0) cout << "initial invalid!" << endl;
-            if (initVal->initValList.empty()) {
+            if (!initVal->initValList.empty()) {
                 if (cnt != 0) tempPtr = builder->create_gep(ptr, {CONST_INT(cnt)}); //没赋值过，那tempPtr实际就是ptr
                 localInit(tempPtr, initVal->initValList, dimensionsCnt, nextUp);
             }
@@ -312,10 +315,8 @@ void GenIR::visit(FuncDefAST &ast) {
     else ret_type = VOID_T;
 
     //获取参数列表
-    if (ast.funcFParamList.empty()) {
-        for (auto &funcFParam:ast.funcFParamList) {
-            funcFParam->accept(*this);
-        }
+    for (auto &funcFParam:ast.funcFParamList) {
+        funcFParam->accept(*this);
     }
     //获取函数类型
     auto funTy = new FunctionType(ret_type, params);
@@ -323,19 +324,19 @@ void GenIR::visit(FuncDefAST &ast) {
     auto func = new Function(funTy, *ast.id, module.get());
     currentFunction = func;
     scope.push(*ast.id, func); //在进入新的作用域之前添加到符号表中
+    //进入函数(进入新的作用域)
+    scope.enter();
 
     std::vector<Value *> args; // 获取函数的形参,通过Function中的iterator
     for (auto arg = func->arguments_.begin(); arg != func->arguments_.end(); arg++)
         args.push_back(*arg);
 
-    //进入函数(进入新的作用域)
-    scope.enter();
     auto bb = new BasicBlock(module.get(), "entry", func);
     builder->BB_ = bb;
     for (int i = 0; i < (int)(paramNames.size()); i++) {
         auto alloc = builder->create_alloca(params[i]); //分配形参空间
         builder->create_store(args[i], alloc);          // store 形参
-        scope.push(paramNames[i], alloc);              //加入作用域
+        scope.push(paramNames[i], alloc);         //加入作用域
     }
     //创建统一return分支
     retBB = new BasicBlock(module.get(), "ret", func);
@@ -351,6 +352,8 @@ void GenIR::visit(FuncDefAST &ast) {
     }
     //重新回到函数开始
     builder->BB_ = bb;
+
+    ast.block->accept(*this);
 
     //处理没有return的空块
     if (!builder->BB_->get_terminator())
@@ -379,7 +382,7 @@ void GenIR::visit(FuncFParamAST &ast) {
 
 void GenIR::visit(BlockAST &ast) {
     //如果是一个新的函数，则不用再进入一个新的作用域
-    if (isNewFunc == true)
+    if (isNewFunc)
         isNewFunc = false;
         //其它情况，需要进入一个新的作用域
     else {
@@ -408,7 +411,7 @@ void GenIR::visit(StmtAST &ast) {
         case ASS: {
             ast.exp->accept(*this);
             auto rval = recentVal;
-            requireLval = true; //提示返回地址
+            requireLVal = true; //提示返回地址
             ast.lVal->accept(*this);
             auto lval = recentVal;
             //检查类型是否一致
@@ -428,7 +431,7 @@ void GenIR::visit(StmtAST &ast) {
             builder->create_br(whileCondBB);
             break;
         case BRE:
-            builder->create_br(whilefalseBB.back());
+            builder->create_br(whileFalseBB);
             break;
         case RET:
             ast.returnStmt->accept(*this);
@@ -509,11 +512,12 @@ void GenIR::visit(IterationStmtAST &ast) {
     auto tempTrue = trueBB;
     auto tempFalse = falseBB; //即while的next block
     auto tempCond = whileCondBB;
+    auto tempWhileFalseBB = whileFalseBB; //break只跳while的false，而不跳全局false
 
     whileCondBB = new BasicBlock(module.get(), to_string(id++), currentFunction);
     trueBB = new BasicBlock(module.get(), to_string(id++), currentFunction);
     falseBB = new BasicBlock(module.get(), to_string(id++), currentFunction);
-    whilefalseBB.push_back(falseBB);
+    whileFalseBB = falseBB;
 
     builder->create_br(whileCondBB);
     builder->BB_ = whileCondBB; //条件也是一个基本块
@@ -538,7 +542,7 @@ void GenIR::visit(IterationStmtAST &ast) {
     trueBB = tempTrue;
     falseBB = tempFalse;
     whileCondBB = tempCond;
-    whilefalseBB.pop_back();
+    whileFalseBB = tempWhileFalseBB;
 }
 
 void GenIR::visit(ExpAST &ast) {
@@ -775,8 +779,8 @@ void GenIR::visit(CondAST &ast) {
 }
 
 void GenIR::visit(LValAST &ast) {
-    bool isTrueLval = requireLval; //是否真是作为左值
-    requireLval = false;
+    bool isTrueLVal = requireLVal; //是否真是作为左值
+    requireLVal = false;
     auto var = scope.find(*ast.id);
     //全局作用域内，一定使用常量，全局作用域下访问到LValAST，那么use_const一定被置为了true
     if (scope.in_global()) {
@@ -834,7 +838,7 @@ void GenIR::visit(LValAST &ast) {
     //指向的还是数组,那么一定是传数组参,数组若为x[2], 参数为int a[]，需要传i32 *
     if (varType->tid_ == Type::ArrayTyID) {
         recentVal = builder->create_gep(var, {CONST_INT(0), CONST_INT(0)});
-    } else if (!isTrueLval) { //如果不是取左值，那么load
+    } else if (!isTrueLVal) { //如果不是取左值，那么load
         recentVal = builder->create_load(var);
     } else { //否则返回地址值
         recentVal = var;
@@ -847,7 +851,19 @@ void GenIR::visit(NumberAST &ast) {
 }
 
 void GenIR::visit(CallAST &ast) {
-
+    auto fun = (Function *)scope.find(*ast.id);
+    vector<Value *> args;
+    for (int i = 0; i < ast.funcCParamList.size(); i++) {
+        ast.funcCParamList[i]->accept(*this);
+        //检查函数形参与实参类型是否匹配
+        if (recentVal->type_ == INT32_T && fun->arguments_[i]->type_ == FLOAT_T) {
+            recentVal = builder->create_sitofp(recentVal, FLOAT_T);
+        } else if (recentVal->type_ == FLOAT_T && fun->arguments_[i]->type_ == INT32_T) {
+            recentVal = builder->create_fptosi(recentVal, INT32_T);
+        }
+        args.push_back(recentVal);
+    }
+    recentVal = builder->create_call(fun, args);
 }
 
 void GenIR::visit(RelExpAST &ast) {
