@@ -61,13 +61,11 @@ public:
     void visit(ReturnStmtAST &ast) override;
     void visit(SelectStmtAST &ast) override;
     void visit(IterationStmtAST &ast) override;
-    void visit(ExpAST &ast) override;
     void visit(AddExpAST &ast) override;
     void visit(LValAST &ast) override;
     void visit(MulExpAST &ast) override;
     void visit(UnaryExpAST &ast) override;
     void visit(PrimaryExpAST &ast) override;
-    void visit(CondAST &ast) override;
     void visit(CallAST &ast) override;
     void visit(NumberAST &ast) override;
     void visit(RelExpAST &ast) override;

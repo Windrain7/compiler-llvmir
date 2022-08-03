@@ -50,10 +50,6 @@ void IterationStmtAST::accept(Visitor &visitor) {
     visitor.visit(*this);
 }
 
-void ExpAST::accept(Visitor &visitor) {
-    visitor.visit(*this);
-}
-
 void AddExpAST::accept(Visitor &visitor) {
     visitor.visit(*this);
 }
@@ -80,10 +76,6 @@ void CallAST::accept(Visitor &visitor) {
 }
 
 void LValAST::accept(Visitor &visitor) {
-    visitor.visit(*this);
-}
-
-void CondAST::accept(Visitor &visitor) {
     visitor.visit(*this);
 }
 

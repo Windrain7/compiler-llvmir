@@ -141,7 +141,7 @@ void GenIR::visit(DefAST &ast) {
             ast.initVal->accept(*this);
             checkInitType();
             if (isConst) {
-                scope.push(varName, recentVal);  //单个常量定义不用new GlobalVariable
+                scope.push(varName, recentVal);  //单个常量定义不用create_alloca
             } else {
                 AllocaInst *varAlloca;
                 varAlloca = builder->create_alloca(curType);
@@ -384,7 +384,7 @@ void GenIR::visit(BlockAST &ast) {
     //如果是一个新的函数，则不用再进入一个新的作用域
     if (isNewFunc)
         isNewFunc = false;
-        //其它情况，需要进入一个新的作用域
+    //其它情况，需要进入一个新的作用域
     else {
         scope.enter();
     }
@@ -543,10 +543,6 @@ void GenIR::visit(IterationStmtAST &ast) {
     falseBB = tempFalse;
     whileCondBB = tempCond;
     whileFalseBB = tempWhileFalseBB;
-}
-
-void GenIR::visit(ExpAST &ast) {
-    ast.addExp->accept(*this);
 }
 
 //根据待计算的两个Constant的类型，求出对应的值赋值到intVal，floatVal中，返回计算结果是否为int
@@ -772,10 +768,6 @@ void GenIR::visit(PrimaryExpAST &ast) {
     } else if (ast.number) {
         ast.number->accept(*this);
     }
-}
-
-void GenIR::visit(CondAST &ast) {
-    ast.lOrExp->accept(*this);
 }
 
 void GenIR::visit(LValAST &ast) {

@@ -30,8 +30,6 @@ class StmtAST;
 class ReturnStmtAST;
 class SelectStmtAST;
 class IterationStmtAST;
-class ExpAST;
-class CondAST;
 class LValAST;
 class PrimaryExpAST;
 class NumberAST;
@@ -85,19 +83,19 @@ public:
 class DefAST : public BaseAST {
 public:
     unique_ptr<string> id;
-    vector<unique_ptr<ExpAST>> arrays;
+    vector<unique_ptr<AddExpAST>> arrays;
     unique_ptr<InitValAST> initVal;
     void accept(Visitor &visitor) override;
 };
 
 class ArraysAST {
 public:
-    vector<unique_ptr<ExpAST>> list;
+    vector<unique_ptr<AddExpAST>> list;
 };
 
 class InitValAST:public BaseAST {
 public:
-    unique_ptr<ExpAST> exp;
+    unique_ptr<AddExpAST> exp;
     vector<unique_ptr<InitValAST>> initValList;
     void accept(Visitor &visitor) override;
 };
@@ -127,7 +125,7 @@ public:
     TYPE bType;
     unique_ptr<string> id;
     bool isArray = false; //用于区分是否是数组参数，此时一维数组和多维数组expArrays都是empty
-    vector<unique_ptr<ExpAST>> arrays;
+    vector<unique_ptr<AddExpAST>> arrays;
     void accept(Visitor &visitor) override;
 };
 
@@ -153,7 +151,7 @@ class StmtAST : public BaseAST {
 public:
     STYPE sType;
     unique_ptr<LValAST> lVal = nullptr;
-    unique_ptr<ExpAST> exp= nullptr;
+    unique_ptr<AddExpAST> exp= nullptr;
     unique_ptr<ReturnStmtAST> returnStmt = nullptr;
     unique_ptr<SelectStmtAST> selectStmt = nullptr;
     unique_ptr<IterationStmtAST> iterationStmt = nullptr;
@@ -163,27 +161,21 @@ public:
 
 class ReturnStmtAST : public BaseAST {
 public:
-    unique_ptr<ExpAST> exp = nullptr;
+    unique_ptr<AddExpAST> exp = nullptr;
     void accept(Visitor &visitor) override;
 };
 
 class SelectStmtAST:public BaseAST {
 public:
-    unique_ptr<CondAST> cond;
+    unique_ptr<LOrExpAST> cond;
     unique_ptr<StmtAST> ifStmt, elseStmt;
     void accept(Visitor &visitor) override;
 };
 
 class IterationStmtAST:public BaseAST {
 public:
-    unique_ptr<CondAST> cond;
+    unique_ptr<LOrExpAST> cond;
     unique_ptr<StmtAST> stmt;
-    void accept(Visitor &visitor) override;
-};
-
-class ExpAST :public BaseAST {
-public:
-    unique_ptr<AddExpAST> addExp = nullptr;
     void accept(Visitor &visitor) override;
 };
 
@@ -214,8 +206,8 @@ public:
 
 class PrimaryExpAST:public BaseAST {
 public:
-    unique_ptr<ExpAST> exp;
-    unique_ptr<LValAST>lval;
+    unique_ptr<AddExpAST> exp;
+    unique_ptr<LValAST> lval;
     unique_ptr<NumberAST> number;
     void accept(Visitor &visitor) override;
 };
@@ -233,26 +225,20 @@ public:
 class LValAST:public BaseAST {
 public:
     unique_ptr<string> id;
-    vector<unique_ptr<ExpAST>> arrays;
+    vector<unique_ptr<AddExpAST>> arrays;
     void accept(Visitor &visitor) override;
 };
 
 class CallAST:public BaseAST {
 public:
     unique_ptr<string> id;
-    vector<unique_ptr<ExpAST>> funcCParamList;
+    vector<unique_ptr<AddExpAST>> funcCParamList;
     void accept(Visitor &visitor) override;
 };
 
 class FuncCParamListAST {
 public:
-    vector<unique_ptr<ExpAST>> list;
-};
-
-class CondAST:public BaseAST {
-public:
-    unique_ptr<LOrExpAST> lOrExp;
-    void accept(Visitor &visitor) override;
+    vector<unique_ptr<AddExpAST>> list;
 };
 
 class RelExpAST:public BaseAST {
@@ -301,12 +287,10 @@ public:
     virtual void visit(ReturnStmtAST& ast) = 0;
     virtual void visit(SelectStmtAST& ast) = 0;
     virtual void visit(IterationStmtAST& ast) = 0;
-    virtual void visit(ExpAST& ast) = 0;
     virtual void visit(AddExpAST& ast) = 0;
     virtual void visit(MulExpAST& ast) = 0;
     virtual void visit(UnaryExpAST& ast) = 0;
     virtual void visit(PrimaryExpAST& ast) = 0;
-    virtual void visit(CondAST& ast) = 0;
     virtual void visit(LValAST& ast) = 0;
     virtual void visit(NumberAST& ast) = 0;
     virtual void visit(CallAST& ast) = 0;

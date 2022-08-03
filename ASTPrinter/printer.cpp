@@ -232,22 +232,6 @@ void Printer::visit(IterationStmtAST &ast) {
     depth -= 2;
 }
 
-void Printer::visit(ExpAST &ast) {
-    PUT(depth);
-    cout << "Exp:" << endl;
-    depth += 2;
-    ast.addExp->accept(*this);
-    depth -= 2;
-}
-
-void Printer::visit(CondAST &ast) {
-    PUT(depth);
-    cout << "Cond:" << endl;
-    depth += 2;
-    ast.lOrExp->accept(*this);
-    depth -= 2;
-}
-
 void Printer::visit(AddExpAST &ast) {
     PUT(depth);
     cout << "AddExp:" <<endl;

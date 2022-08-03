@@ -32,8 +32,6 @@
     ReturnStmtAST* returnStmt;
     SelectStmtAST* selectStmt;
     IterationStmtAST* iterationStmt;
-    ExpAST* exp;
-    CondAST* cond;
     LValAST* lVal;
     PrimaryExpAST* primaryExp;
     NumberAST* number;
@@ -73,8 +71,6 @@
 %type <returnStmt> ReturnStmt;
 %type <selectStmt> SelectStmt;
 %type <iterationStmt> IterationStmt;
-%type <exp> Exp;
-%type <cond> Cond;
 %type <lVal> LVal;
 %type <primaryExp> PrimaryExp;
 %type <number> Number;
@@ -82,11 +78,11 @@
 %type <call> Call;
 %type <funcCParamList> FuncCParamList;
 %type <mulExp> MulExp;
-%type <addExp> AddExp;
+%type <addExp> Exp, AddExp;
 %type <relExp> RelExp;
 %type <eqExp> EqExp;
 %type <lAndExp> LAndExp;
-%type <lOrExp> LOrExp;
+%type <lOrExp> Cond, LOrExp;
 
 %type <ty> BType VoidType
 %type <op> UnaryOp
@@ -204,11 +200,11 @@ Def:	ID Arrays ASSIGN InitVal {
 // 数组
 Arrays: LB Exp RB {
 			$$ = new ArraysAST();
-			$$->list.push_back(unique_ptr<ExpAST>($2));
+			$$->list.push_back(unique_ptr<AddExpAST>($2));
 		}
         |Arrays LB Exp RB {
 			$$ = $1;
-			$$->list.push_back(unique_ptr<ExpAST>($3));
+			$$->list.push_back(unique_ptr<AddExpAST>($3));
 		}
 		;
 
@@ -216,7 +212,7 @@ Arrays: LB Exp RB {
 // 变量或常量初值
 InitVal: Exp {
 			$$ = new InitValAST();
-			$$->exp = unique_ptr<ExpAST>($1);
+			$$->exp = unique_ptr<AddExpAST>($1);
 		}		
 		|LC RC	{
 			$$ = new InitValAST();
@@ -346,12 +342,12 @@ Stmt:	 SEMICOLON	{
 			$$ = new StmtAST();
 			$$->sType = ASS;
 			$$->lVal = unique_ptr<LValAST>($1);
-			$$->exp = unique_ptr<ExpAST>($3);
+			$$->exp = unique_ptr<AddExpAST>($3);
 		}
 		|Exp SEMICOLON {
 			$$ = new StmtAST();
 			$$->sType = EXP;
-			$$->exp = unique_ptr<ExpAST>($1);
+			$$->exp = unique_ptr<AddExpAST>($1);
 		}				
     	|CONTINUE SEMICOLON	{
 			$$ = new StmtAST();
@@ -388,12 +384,12 @@ Stmt:	 SEMICOLON	{
 //选择语句
 SelectStmt:	IF LP Cond RP Stmt %prec LOWER_THEN_ELSE {
 				$$ = new SelectStmtAST();
-				$$->cond = unique_ptr<CondAST>($3);
+				$$->cond = unique_ptr<LOrExpAST>($3);
 				$$->ifStmt = unique_ptr<StmtAST>($5);
 			}
 			|IF LP Cond RP Stmt ELSE Stmt {
 				$$ = new SelectStmtAST();
-				$$->cond = unique_ptr<CondAST>($3);
+				$$->cond = unique_ptr<LOrExpAST>($3);
 				$$->ifStmt = unique_ptr<StmtAST>($5);
 				$$->elseStmt = unique_ptr<StmtAST>($7);
 			}   
@@ -402,14 +398,14 @@ SelectStmt:	IF LP Cond RP Stmt %prec LOWER_THEN_ELSE {
 //循环语句
 IterationStmt:  WHILE LP Cond RP Stmt {
 					$$ = new IterationStmtAST();
-					$$->cond = unique_ptr<CondAST>($3);
+					$$->cond = unique_ptr<LOrExpAST>($3);
 					$$->stmt = unique_ptr<StmtAST>($5);
 				}
                 ;
 //返回语句
 ReturnStmt:	RETURN Exp SEMICOLON {
 				$$ = new ReturnStmtAST();
-				$$->exp = unique_ptr<ExpAST>($2);
+				$$->exp = unique_ptr<AddExpAST>($2);
 			}
             |RETURN SEMICOLON {
 				$$ = new ReturnStmtAST();
@@ -417,15 +413,13 @@ ReturnStmt:	RETURN Exp SEMICOLON {
             ;
 // 表达式
 Exp:	AddExp {
-			$$ = new ExpAST();
-			$$->addExp = unique_ptr<AddExpAST>($1);
+			$$ = $1;
 		}
 		;
 
 // 条件表达式
 Cond:	LOrExp {
-			$$ = new CondAST();
-			$$->lOrExp = unique_ptr<LOrExpAST>($1);
+			$$ = $1;
 		}
 		;
 
@@ -444,7 +438,7 @@ LVal:	ID {
 // 基本表达式
 PrimaryExp:	 LP Exp RP {
 				$$ = new PrimaryExpAST();
-				$$->exp = unique_ptr<ExpAST>($2);
+				$$->exp = unique_ptr<AddExpAST>($2);
 				
 			}
 			|LVal {
@@ -521,11 +515,11 @@ UnaryOp: ADD {
 // 函数实参表
 FuncCParamList: Exp {
 				$$ = new FuncCParamListAST();
-				$$->list.push_back(unique_ptr<ExpAST>($1));
+				$$->list.push_back(unique_ptr<AddExpAST>($1));
 			}
 			|FuncCParamList COMMA Exp {
 				$$ = (FuncCParamListAST*) $1;
-				$$->list.push_back(unique_ptr<ExpAST>($3));
+				$$->list.push_back(unique_ptr<AddExpAST>($3));
 			}
 			;
 				
