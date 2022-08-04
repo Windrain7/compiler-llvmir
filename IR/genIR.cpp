@@ -309,17 +309,17 @@ void GenIR::visit(FuncDefAST &ast) {
     isNewFunc = true;
     params.clear();
     paramNames.clear();
-    Type *ret_type;
-    if (ast.funcType == TYPE_INT) ret_type = INT32_T;
-    else if (ast.funcType == TYPE_FLOAT) ret_type = FLOAT_T;
-    else ret_type = VOID_T;
+    Type *retType;
+    if (ast.funcType == TYPE_INT) retType = INT32_T;
+    else if (ast.funcType == TYPE_FLOAT) retType = FLOAT_T;
+    else retType = VOID_T;
 
     //获取参数列表
     for (auto &funcFParam:ast.funcFParamList) {
         funcFParam->accept(*this);
     }
     //获取函数类型
-    auto funTy = new FunctionType(ret_type, params);
+    auto funTy = new FunctionType(retType, params);
     //添加函数
     auto func = new Function(funTy, *ast.id, module.get());
     currentFunction = func;
@@ -340,12 +340,12 @@ void GenIR::visit(FuncDefAST &ast) {
     }
     //创建统一return分支
     retBB = new BasicBlock(module.get(), "ret", func);
-    if (ret_type == VOID_T) {
+    if (retType == VOID_T) {
         // void类型无需返回值
         builder->BB_ = retBB;
         builder->create_void_ret();
     } else {
-        retAlloca = builder->create_alloca(ret_type); // 在内存中分配返回值的位置
+        retAlloca = builder->create_alloca(retType); // 在内存中分配返回值的位置
         builder->BB_ = retBB;
         auto retLoad = builder->create_load(retAlloca);
         builder->create_ret(retLoad);
@@ -368,8 +368,8 @@ void GenIR::visit(FuncFParamAST &ast) {
     //是否为数组
     if (ast.isArray) {
         useConst = true; //数组维度是整型常量
-        for (auto &exp : ast.arrays) {
-            exp->accept(*this);
+        for (int i = ast.arrays.size() - 1; i >= 0; i--) {
+            ast.arrays[i]->accept(*this);
             paramType = module->get_array_type(paramType, ((ConstantInt *)recentVal)->value_);
         }
         useConst = false;
@@ -409,19 +409,20 @@ void GenIR::visit(StmtAST &ast) {
         case SEMI:
             break;
         case ASS: {
+            Value* val[2]; //lVal, rVal
             ast.exp->accept(*this);
-            auto rval = recentVal;
+            val[1] = recentVal;
             requireLVal = true; //提示返回地址
             ast.lVal->accept(*this);
-            auto lval = recentVal;
+            val[0] = recentVal;
             //检查类型是否一致
-            if (lval->type_ == INT32PTR_T && rval->type_ == FLOAT_T) {
-                rval = builder->create_fptosi(rval, INT32_T);
+            if (val[0]->type_ == INT32PTR_T && val[1]->type_ == FLOAT_T) {
+                val[1] = builder->create_fptosi(val[1], INT32_T);
             }
-            if (rval->type_ == INT32_T && lval->type_ == FLOATPTR_T) {
-                rval = builder->create_sitofp(rval, FLOAT_T);
+            if (val[1]->type_ == INT32_T && val[0]->type_ == FLOATPTR_T) {
+                val[1] = builder->create_sitofp(val[1], FLOAT_T);
             }
-            builder->create_store(rval, lval);
+            builder->create_store(val[1], val[0]);
             break;
         }
         case EXP:
